@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MNIST WebGPU Trainer</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.tailwindcss.com" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+</head>
+<body class="bg-slate-100 text-slate-900">
+  <div id="webgpu-required" class="hidden fixed inset-0 z-50 bg-slate-900/95 text-slate-100 flex items-center justify-center px-10">
+    <div class="max-w-xl text-center space-y-4">
+      <h1 class="text-3xl font-semibold">WebGPU Required</h1>
+      <p>This demo needs Chrome 113+ with WebGPU enabled. To enable it, open <code>chrome://flags</code> and activate <strong>WebGPU Developer Features</strong>, then relaunch Chrome.</p>
+      <p>If you are already using a compatible Chrome build, ensure you are on desktop (Windows, macOS, Linux) and that hardware acceleration is enabled.</p>
+    </div>
+  </div>
+
+  <div id="boot-overlay" class="fixed inset-0 z-40 bg-slate-900/90 text-slate-100 flex flex-col items-center justify-center space-y-6">
+    <div class="text-center space-y-2">
+      <p class="text-lg font-medium">Loading MNIST WebGPU Trainer…</p>
+      <p id="boot-status" class="text-sm text-slate-300">Preparing assets</p>
+    </div>
+    <div class="w-80 h-3 bg-slate-700 rounded-full overflow-hidden">
+      <div id="boot-progress" class="h-full bg-emerald-400 transition-all duration-200" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div id="app" class="min-h-screen flex flex-col">
+    <nav class="bg-white border-b border-slate-200 shadow-sm">
+      <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-6">
+          <h1 class="text-2xl font-semibold">MNIST WebGPU Trainer</h1>
+          <label class="flex items-center gap-2 text-sm font-medium text-slate-700">
+            Model
+            <select id="model-select" class="border border-slate-300 rounded-md px-2 py-1 focus:outline-none focus:ring focus:ring-emerald-400">
+              <option value="lr">Logistic Regression</option>
+              <option value="cnn">Small CNN</option>
+            </select>
+          </label>
+          <span class="text-xs uppercase tracking-wider bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md">WebGPU (Chrome)</span>
+        </div>
+        <a id="help-link" class="text-sm text-emerald-600 hover:text-emerald-700 font-medium" href="#help">Help</a>
+      </div>
+    </nav>
+
+    <main class="flex-1 max-w-7xl mx-auto w-full px-6 py-6 grid grid-cols-3 gap-6">
+      <section id="controls-panel" class="col-span-1 bg-white border border-slate-200 rounded-lg shadow-sm p-5 space-y-6 overflow-y-auto">
+        <div>
+          <h2 class="text-lg font-semibold mb-3">Dataset</h2>
+          <div class="space-y-3 text-sm">
+            <label class="flex flex-col">
+              <span class="font-medium">Train samples</span>
+              <input id="train-samples" type="number" min="100" max="60000" step="100" value="20000" class="input" />
+            </label>
+            <label class="flex flex-col">
+              <span class="font-medium">Test samples</span>
+              <input id="test-samples" type="number" min="1000" max="10000" step="100" value="5000" class="input" />
+            </label>
+            <button id="load-dataset" class="btn-primary w-full">Load Dataset</button>
+          </div>
+        </div>
+
+        <div>
+          <h2 class="text-lg font-semibold mb-3">Hyperparameters</h2>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <label class="flex flex-col">
+              <span class="font-medium">Epochs</span>
+              <input id="epochs" type="number" min="1" max="100" value="5" class="input" />
+            </label>
+            <label class="flex flex-col">
+              <span class="font-medium">Batch size</span>
+              <input id="batch-size" type="number" min="1" max="1024" value="128" class="input" />
+            </label>
+            <label class="flex flex-col">
+              <span class="font-medium">Learning rate</span>
+              <input id="learning-rate" type="number" step="0.0001" value="0.001" class="input" />
+            </label>
+            <label class="flex flex-col">
+              <span class="font-medium">Seed</span>
+              <input id="seed" type="number" value="42" class="input" />
+            </label>
+            <label class="flex flex-col col-span-2">
+              <span class="font-medium">Optimizer</span>
+              <select id="optimizer" class="input">
+                <option value="adam">Adam</option>
+                <option value="sgd">SGD</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <h2 class="text-lg font-semibold mb-3">Training</h2>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <button id="init-model" class="btn-secondary">Initialize</button>
+            <button id="start-training" class="btn-primary">Start</button>
+            <button id="pause-training" class="btn-secondary">Pause</button>
+            <button id="resume-training" class="btn-secondary">Resume</button>
+            <button id="quick-train" class="btn-secondary col-span-2">Quick Train (1 epoch)</button>
+            <button id="reset-model" class="btn-danger col-span-2">Reset</button>
+            <button id="evaluate" class="btn-secondary col-span-2">Evaluate on Test</button>
+          </div>
+        </div>
+
+        <div>
+          <h2 class="text-lg font-semibold mb-3">Persistence</h2>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <button id="save-indexeddb" class="btn-secondary">Save to IndexedDB</button>
+            <button id="load-indexeddb" class="btn-secondary">Load from IndexedDB</button>
+            <button id="download-model" class="btn-secondary">Download JSON</button>
+            <label class="btn-secondary cursor-pointer text-center">
+              Upload JSON
+              <input id="upload-model" type="file" accept="application/json" class="hidden" />
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section id="training-panel" class="col-span-2 bg-white border border-slate-200 rounded-lg shadow-sm p-5 space-y-6">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <h2 class="text-lg font-semibold mb-2">Training Loss</h2>
+            <canvas id="chart-loss" height="200"></canvas>
+          </div>
+          <div>
+            <h2 class="text-lg font-semibold mb-2">Training Accuracy</h2>
+            <canvas id="chart-train-acc" height="200"></canvas>
+          </div>
+          <div class="col-span-2">
+            <h2 class="text-lg font-semibold mb-2">Test Accuracy</h2>
+            <canvas id="chart-test-acc" height="150"></canvas>
+          </div>
+        </div>
+        <div class="border border-slate-200 rounded-md p-4 bg-slate-50 text-sm flex flex-wrap gap-x-8 gap-y-2">
+          <span><strong>Status:</strong> <span id="status-line">Idle</span></span>
+          <span><strong>Epoch:</strong> <span id="status-epoch">0</span></span>
+          <span><strong>Batch:</strong> <span id="status-batch">0</span></span>
+          <span><strong>Examples/sec:</strong> <span id="status-throughput">0</span></span>
+          <span><strong>Loss:</strong> <span id="status-loss">-</span></span>
+          <span><strong>Accuracy:</strong> <span id="status-acc">-</span></span>
+        </div>
+
+        <div>
+          <h2 class="text-lg font-semibold mb-3">Weights & Activations</h2>
+          <div id="weights-view" class="grid grid-cols-5 gap-3"></div>
+        </div>
+      </section>
+    </main>
+
+    <section id="inference-panel" class="bg-white border-t border-slate-200 shadow-inner py-6">
+      <div class="max-w-7xl mx-auto px-6 grid grid-cols-2 gap-6">
+        <div class="space-y-4">
+          <h2 class="text-lg font-semibold">Draw Digit</h2>
+          <canvas id="draw-canvas" width="280" height="280" class="border border-slate-300 rounded-md bg-white shadow"></canvas>
+          <div class="flex items-center gap-3 text-sm">
+            <label class="flex items-center gap-2">
+              Pen size
+              <input id="pen-size" type="range" min="4" max="24" step="2" value="14" />
+            </label>
+            <button id="clear-draw" class="btn-secondary">Clear</button>
+            <button id="invert-draw" class="btn-secondary">Invert</button>
+            <button id="threshold-draw" class="btn-secondary">Threshold</button>
+          </div>
+          <button id="predict" class="btn-primary">Predict</button>
+        </div>
+        <div class="space-y-4">
+          <h2 class="text-lg font-semibold">Preview & Probabilities</h2>
+          <canvas id="preview-canvas" width="140" height="140" class="border border-slate-300 rounded-md bg-white"></canvas>
+          <canvas id="chart-probs" height="200"></canvas>
+          <div id="top-predictions" class="text-lg font-semibold text-emerald-600"></div>
+        </div>
+      </div>
+    </section>
+
+    <footer id="help" class="bg-slate-900 text-slate-200 py-6 mt-6">
+      <div class="max-w-7xl mx-auto px-6 space-y-3 text-sm">
+        <p><strong>MNIST WebGPU Trainer</strong> demonstrates end-to-end training of classic MNIST models directly in the browser using WebGPU. All compute (forward, backward, optimizer) runs on WebGPU compute shaders. No third-party ML frameworks are used.</p>
+        <p>Tested on Chrome desktop builds 113+. Enable WebGPU via <code>chrome://flags</code> when necessary and ensure hardware acceleration is active.</p>
+        <p>IA has been used. Dataset courtesy of the Google LearnJS examples.</p>
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
