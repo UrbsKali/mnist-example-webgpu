@@ -32,14 +32,25 @@ export async function loadShaderModule(device, url) {
   return module;
 }
 
+function getArrayView(arrayLike) {
+  if (arrayLike instanceof ArrayBuffer) {
+    return new Uint8Array(arrayLike);
+  }
+  if (ArrayBuffer.isView(arrayLike)) {
+    return new Uint8Array(arrayLike.buffer, arrayLike.byteOffset, arrayLike.byteLength);
+  }
+  throw new Error('Unsupported buffer data type');
+}
+
 export function createBuffer(device, array, usage, label) {
+  const byteLength = array.byteLength ?? getArrayView(array).byteLength;
   const buffer = device.createBuffer({
     label,
-    size: align(array.byteLength, 4),
+    size: align(byteLength, 4),
     usage,
     mappedAtCreation: true,
   });
-  const view = array instanceof ArrayBuffer ? new Uint8Array(array) : new Uint8Array(array.buffer);
+  const view = getArrayView(array);
   new Uint8Array(buffer.getMappedRange()).set(view);
   buffer.unmap();
   return buffer;
@@ -54,8 +65,8 @@ export function createEmptyBuffer(device, byteLength, usage, label) {
 }
 
 export function writeBuffer(device, buffer, data, offset = 0) {
-  const source = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer);
-  device.queue.writeBuffer(buffer, offset, source, data.byteOffset ?? 0, data.byteLength ?? source.byteLength);
+  const view = getArrayView(data);
+  device.queue.writeBuffer(buffer, offset, view, 0, view.byteLength);
 }
 
 export async function readBufferToArray(device, buffer, constructor, length) {

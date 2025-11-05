@@ -342,9 +342,6 @@ export class LogisticRegressionModel {
     this.updateForwardUniforms(batchSize);
     this.updateSoftmaxUniforms(batchSize);
     this.updateReduceUniforms(batchSize);
-    this.updateScaleUniform(this.features * this.classes, 1 / batchSize);
-    this.updateSgdUniform(this.features * this.classes);
-    this.updateAdamUniform(this.features * this.classes);
 
     if (!this.bindGroups.forward) {
       this.createBindGroups();
@@ -373,8 +370,7 @@ export class LogisticRegressionModel {
     pass.dispatchWorkgroups(ceilDiv(this.features * this.classes, WORKGROUP_128));
     pass.end();
 
-    // Reduce bias.
-    this.updateScaleUniform(this.classes, 1);
+  // Reduce bias.
     pass = encoder.beginComputePass();
     pass.setPipeline(this.pipelines.reduceBias);
     pass.setBindGroup(0, this.bindGroups.reduceBias);
@@ -415,14 +411,14 @@ export class LogisticRegressionModel {
       this.step += 1;
       this.beta1Power *= this.beta1;
       this.beta2Power *= this.beta2;
-  this.updateAdamUniform(this.uniformBuffers.adamWeights, this.features * this.classes);
+      this.updateAdamUniform(this.uniformBuffers.adamWeights, this.features * this.classes);
       pass = encoder.beginComputePass();
       pass.setPipeline(this.pipelines.adam);
       pass.setBindGroup(0, this.bindGroups.adamWeights);
       pass.dispatchWorkgroups(ceilDiv(this.features * this.classes, WORKGROUP_128));
       pass.end();
 
-  this.updateAdamUniform(this.uniformBuffers.adamBias, this.classes);
+      this.updateAdamUniform(this.uniformBuffers.adamBias, this.classes);
       pass = encoder.beginComputePass();
       pass.setPipeline(this.pipelines.adam);
       pass.setBindGroup(0, this.bindGroups.adamBias);

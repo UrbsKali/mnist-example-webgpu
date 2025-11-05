@@ -4,6 +4,8 @@ struct Conv2DFilterInfo {
   inChannels : u32;
   outChannels : u32;
   kernelSize : u32;
+  stride : u32;
+  padding : u32;
   batch : u32;
 }
 
@@ -29,13 +31,15 @@ fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
   let ky = kernelIndex / info.kernelSize;
   let kx = kernelIndex % info.kernelSize;
   let halfKernel = info.kernelSize / 2u;
+  let stride = info.stride;
+  let padding = info.padding;
 
   var acc : f32 = 0.0;
   for (var batch : u32 = 0u; batch < info.batch; batch = batch + 1u) {
     for (var y : u32 = 0u; y < info.height; y = y + 1u) {
       for (var x : u32 = 0u; x < info.width; x = x + 1u) {
-        let inY = i32(y) + i32(ky) - i32(halfKernel);
-        let inX = i32(x) + i32(kx) - i32(halfKernel);
+        let inY = i32(y * stride) + i32(ky) - i32(padding);
+        let inX = i32(x * stride) + i32(kx) - i32(padding);
         if (inY < 0 || inY >= i32(info.height) || inX < 0 || inX >= i32(info.width)) {
           continue;
         }
